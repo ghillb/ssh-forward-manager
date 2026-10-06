@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ssh-forward-manager"
-version = "0.1.0"
+version = "0.1.1"
 description = "Named SSH forwards with systemd supervision and optional Noctalia controls"
 requires-python = ">=3.11"
 license = "MIT"

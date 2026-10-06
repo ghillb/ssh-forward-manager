@@ -6,6 +6,8 @@ Connections run independently of Noctalia, with a standalone CLI for the same co
 
 ## Plugin
 
+ID: `ghillb/portforward`
+
 | Type | ID | Purpose |
 | --- | --- | --- |
 | Service | `status` | Connection status |

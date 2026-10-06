@@ -241,3 +241,8 @@ The CLI source is in `portforward/backend`. The plugin uses the CLI for controls
 and status; systemd supervises SSH independently of Noctalia.
 See the [Noctalia plugin API](https://docs.noctalia.dev/noctalia/plugins/development/runtime-api/)
 for integration details.
+
+CI checks pushes and pull requests. To release, align the versions in
+`pyproject.toml`, `catalog.toml` and `portforward/plugin.toml`, update
+`.github/release-notes.md`, then push a matching `vX.Y.Z` tag after checks pass.
+The tag publishes a GitHub release; ordinary commits do not.

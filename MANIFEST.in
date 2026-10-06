@@ -1,4 +1,4 @@
 include install.py catalog.toml
-recursive-include portforward *.luau *.toml *.json *.py *.service *.md LICENSE
+recursive-include portforward *.luau *.toml *.json *.py *.service *.md *.webp LICENSE
 recursive-exclude portforward __pycache__/* *.pyc
 prune portforward/backend/ssh_forward_manager.egg-info

@@ -1,0 +1,71 @@
+name: Checks and releases
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+        with:
+          version: '0.12.9'
+          python-version: '3.11'
+          enable-cache: true
+      - run: uv sync --locked
+      - name: Python checks
+        run: |
+          uv run ruff check portforward/backend tests install.py
+          uv run ruff format --check portforward/backend tests install.py
+          uv run pyright
+          uv run pytest -q
+      - name: Catalogue validation
+        env:
+          VALIDATOR_REV: a1b78275df2c1c25dab6d1bbcefd68de97a74848
+        run: |
+          validator="$RUNNER_TEMP/noctalia/.github/workflows/scripts/validate-plugins.py"
+          mkdir -p "$(dirname "$validator")"
+          curl --fail --silent --show-error --location \
+            "https://raw.githubusercontent.com/noctalia-dev/community-plugins/$VALIDATOR_REV/.github/workflows/scripts/validate-plugins.py" \
+            --output "$validator"
+          uv run python "$validator" --root "$GITHUB_WORKSPACE"
+      - name: Version alignment
+        run: |
+          uv run python - <<'PY'
+          import os
+          import tomllib
+          from pathlib import Path
+          def read(path):
+              return tomllib.loads(Path(path).read_text())
+          version = read('pyproject.toml')['project']['version']
+          manifest = read('portforward/plugin.toml')
+          catalogue = read('catalog.toml')['plugin'][0]
+          assert manifest['version'] == version, 'Plugin version differs from CLI'
+          assert all(manifest[key] == value for key, value in catalogue.items()), 'Catalogue differs from plugin'
+          if os.environ['GITHUB_REF_TYPE'] == 'tag':
+              assert os.environ['GITHUB_REF_NAME'] == f'v{version}', 'Tag differs from package version'
+          PY
+      - run: uv build
+
+  release:
+    needs: checks
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "$GITHUB_REF_NAME" --verify-tag
+          --title "Port Forwarding $GITHUB_REF_NAME"
+          --notes-file .github/release-notes.md
