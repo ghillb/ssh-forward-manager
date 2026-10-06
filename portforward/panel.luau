@@ -4,7 +4,7 @@ local cards = require("./cards.luau")
 local tr = noctalia.tr
 local snapshot = noctalia.state.get("snapshot") or { profiles = {} }
 local busy = noctalia.state.get("busy") or false
-local expanded, pendingDelete, form, logText, menu = nil, nil, nil, nil, nil
+local expanded, pendingDelete, form, logText = nil, nil, nil, nil
 local copied, copiedUntil, detailProfile = nil, 0, nil
 local sequence = 0
 local pending = nil
@@ -26,7 +26,7 @@ local function newMapping(key, mapping)
 end
 
 local function edit(profile)
-  menu, pendingDelete = nil, nil
+  pendingDelete = nil
   sequence += 1
   form = { session = tostring(sequence), id = profile and profile.id or "p-" .. os.time() .. "-" .. math.random(10000, 99999),
     existing = profile ~= nil, live = profile and (profile.state == "connected" or profile.state == "connecting" or profile.state == "reconnecting"),
@@ -73,7 +73,6 @@ local function resolveHost()
 end
 
 local function logs(profile)
-  menu = nil
   detailProfile = profile
   busy = true
   render()
@@ -88,25 +87,20 @@ end
 local function profileCard(profile)
   local active = profile.state == "connected" or profile.state == "connecting" or profile.state == "reconnecting"
   return cards.render(profile, {
-    expanded = expanded == profile.id, menu = menu == profile.id, pendingDelete = pendingDelete == profile.id,
+    expanded = expanded == profile.id, pendingDelete = pendingDelete == profile.id,
     copied = copied, busy = busy,
   }, {
     expand = function()
       if expanded == profile.id then expanded = nil else expanded = profile.id end
-      menu, pendingDelete = nil, nil
-      render()
-    end,
-    menu = function()
-      if menu == profile.id then menu = nil else menu = profile.id end
       pendingDelete = nil
       render()
     end,
     edit = function() edit(profile) end,
     details = function() logs(profile) end,
-    delete = function() menu = nil; pendingDelete = profile.id; render() end,
+    delete = function() pendingDelete = profile.id; render() end,
     cancelDelete = function() pendingDelete = nil; render() end,
     confirmDelete = function() request({ "delete", profile.id }, "delete") end,
-    control = function() menu, pendingDelete = nil, nil; request({ active and "disconnect" or "connect", profile.id }, "control") end,
+    control = function() pendingDelete = nil; request({ active and "disconnect" or "connect", profile.id }, "control") end,
     open = function(port) request({ "open", profile.id, tostring(port) }, "control") end,
     copy = function(port, address)
       if noctalia.copyToClipboard(address, "text/plain") then
@@ -172,7 +166,7 @@ function render()
 end
 
 function onOpen()
-  menu, pendingDelete, copied = nil, nil, nil
+  pendingDelete, copied = nil, nil
   local profiles = snapshot.profiles or {}
   expanded = #profiles == 1 and profiles[1].id or nil
   panel.setWantsSecondTicks(false)

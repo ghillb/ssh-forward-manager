@@ -33,7 +33,8 @@ Click the forwarding icon in the bar. Add a name, SSH alias or `user@host`, and
 one or more local-port → remote-host:remote-port mappings. Remote hosts are
 resolved from the SSH server. Use Check host to preview OpenSSH's resolved
 destination. Expand a profile for its ports, browser opening and copy-address
-actions. The three-dot action menu contains Edit, Details & logs, and Delete.
+actions. The native Actions dropdown contains Edit, Details & logs, and Delete.
+Its popup leaves port rows in place. A sole profile expands automatically.
 Delete requires an inline confirmation. The panel uses a stable fixed height
 with scrolling; Noctalia owns its dimensions and placement. Editing a connected
 profile restarts its tunnel with the saved mappings; if the new settings fail,

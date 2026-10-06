@@ -42,18 +42,16 @@ function M.render(profile, state, actions)
       }),
       ui.button({ text = active and tr("disconnect") or failed and tr("retry") or tr("connect"),
         controlSize = "sm", variant = active and "outline" or "primary", enabled = not state.busy, onClick = actions.control }),
-      ui.button({ glyph = "dots", controlSize = "sm", width = 32, variant = "ghost", tooltip = tr("more"),
-        selected = state.menu, enabled = not state.busy, onClick = actions.menu }),
+      ui.select({ key = "actions-" .. profile.id, controlSize = "sm", width = 94,
+        options = { tr("actions"), tr("edit"), tr("details"), tr("delete") },
+        selectedIndex = 0, enabled = not state.busy, onChange = function(value)
+          local index = tonumber(value)
+          if index == 1 then actions.edit()
+          elseif index == 2 then actions.details()
+          elseif index == 3 then actions.delete() end
+        end }),
     }),
   }
-  if state.menu then
-    table.insert(rows, ui.column({ key = "actions", paddingH = 12, paddingV = 8, gap = 2 }, {
-      ui.button({ text = tr("edit"), glyph = "pencil", variant = "ghost", contentAlign = "start", controlSize = "sm", onClick = actions.edit }),
-      ui.button({ text = tr("details"), glyph = "file-text", variant = "ghost", contentAlign = "start", controlSize = "sm", onClick = actions.details }),
-      ui.separator({ color = "outline" }),
-      ui.button({ text = tr("delete"), glyph = "trash", variant = "ghost", contentAlign = "start", controlSize = "sm", onClick = actions.delete }),
-    }))
-  end
   if state.pendingDelete then
     table.insert(rows, ui.column({ key = "delete-confirmation", paddingH = 14, paddingV = 12, gap = 10 }, {
       ui.label({ text = tr(active and "delete_live_hint" or "delete_hint"), fontSize = 12 }),

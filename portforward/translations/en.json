@@ -48,7 +48,7 @@
   "backend.failed": "Could not run the forwarding backend.",
   "backend.invalid": "The forwarding backend returned an invalid response.",
   "add_profile": "Add profile",
-  "more": "Profile actions",
+  "actions": "Actions",
   "port": "port",
   "copy_failed": "Could not copy the address.",
   "details": "Details & logs",
