@@ -9,7 +9,7 @@ Saving a profile does not connect it. Autoconnect is not currently supported.
 
 Watch the 24-second walkthrough or expand the screenshots below.
 
-https://github.com/user-attachments/assets/a760432b-5c6e-403a-b22f-cb1039b051eb
+https://github.com/user-attachments/assets/d8ccfb2f-2f86-4247-9c19-1b2305d6e1bb
 
 <details>
 <summary>Profiles and controls</summary>
@@ -18,37 +18,37 @@ https://github.com/user-attachments/assets/a760432b-5c6e-403a-b22f-cb1039b051eb
 
 Manage multiple connections.
 
-![Profile overview](https://github.com/user-attachments/assets/529f87f1-08f4-47fd-8771-e53e741e991d)
+![Profile overview](https://github.com/user-attachments/assets/0d4cfff7-b084-4e7d-bbe6-1191d68d62ee)
 
 #### Connected profile
 
 Open forwarded addresses in your browser or copy them.
 
-![Connected profile](https://github.com/user-attachments/assets/c1a5fb42-b0e3-477a-844a-b84f6f117414)
+![Connected profile](https://github.com/user-attachments/assets/e2bfbc62-eeed-4cf2-b821-e20ed10c09e1)
 
 #### Disconnected profile
 
 Connect a saved profile when you need it.
 
-![Disconnected profile](https://github.com/user-attachments/assets/018e1b36-08cb-48eb-be52-9b2b568a963b)
+![Disconnected profile](https://github.com/user-attachments/assets/ef16f47b-350b-43ff-ad3a-d3c4c9f8c309)
 
 #### Profile actions
 
 Edit a profile, view logs, or delete it from the Actions menu.
 
-![Profile actions](https://github.com/user-attachments/assets/b6d31101-a5a7-47a8-b902-1dc076f9d839)
+![Profile actions](https://github.com/user-attachments/assets/ddae9c94-58ea-4030-a1be-ed8ce8bcf952)
 
 #### Copy feedback
 
 Copy an address to the clipboard.
 
-![Copy feedback](https://github.com/user-attachments/assets/14b78b38-2373-4b71-bae4-bd4ca9e08930)
+![Copy feedback](https://github.com/user-attachments/assets/5a2c0884-605a-4a19-8b39-9a55305ba1d1)
 
 #### Delete confirmation
 
 Confirm before deleting a profile.
 
-![Delete confirmation](https://github.com/user-attachments/assets/00c2f4a1-c82a-4164-910c-895da576f71d)
+![Delete confirmation](https://github.com/user-attachments/assets/438df889-40ce-4203-a47d-08291747fb7c)
 
 </details>
 
@@ -59,25 +59,25 @@ Confirm before deleting a profile.
 
 Choose a name, SSH destination, and ports.
 
-![New profile](https://github.com/user-attachments/assets/8fe7db99-1f56-4edb-a69c-bfe33088757c)
+![New profile](https://github.com/user-attachments/assets/0f6eb59b-c787-475a-950b-3124d5c4214c)
 
 #### Edit profile
 
 Check your SSH destination and apply changes to a running connection.
 
-![Edit profile](https://github.com/user-attachments/assets/6f980310-7be2-4f5c-9a8b-079e96b64ac9)
+![Edit profile](https://github.com/user-attachments/assets/320e7f8d-488d-4477-8ed4-4552f39aba8a)
 
 #### Port mappings
 
 Forward different local and remote ports, with HTTP or HTTPS browser links.
 
-![Port mappings](https://github.com/user-attachments/assets/421aee0c-9193-40d2-807e-171567a27db3)
+![Port mappings](https://github.com/user-attachments/assets/54018fbb-7a52-49eb-88ff-db8b2c14863c)
 
 #### Form validation
 
 Missing or invalid fields are highlighted before saving.
 
-![Form validation](https://github.com/user-attachments/assets/48deb651-006e-463a-93dd-312821a5c20f)
+![Form validation](https://github.com/user-attachments/assets/b523b64a-5b40-4aab-bc52-c9c08315f6a9)
 
 </details>
 
@@ -88,31 +88,31 @@ Missing or invalid fields are highlighted before saving.
 
 Reconnect automatically after a connection interruption.
 
-![Reconnecting](https://github.com/user-attachments/assets/bbccaa20-49d1-40e3-99b7-8e1b0626db2d)
+![Reconnecting](https://github.com/user-attachments/assets/4c6095e5-9f21-4f56-9624-5714ba806302)
 
 #### Port conflict
 
 See which application is using a port and how to resolve the conflict.
 
-![Port conflict](https://github.com/user-attachments/assets/3ecfbe4e-369a-4cf5-9a2c-a98359e79231)
+![Port conflict](https://github.com/user-attachments/assets/3002976b-8167-4935-8477-7cc94c1191e8)
 
 #### Authentication failure
 
 Find help with SSH user, key, and agent errors.
 
-![Authentication failure](https://github.com/user-attachments/assets/b80d9678-f5b6-48c6-a848-84c50ee993a4)
+![Authentication failure](https://github.com/user-attachments/assets/9cbfa46f-dbd2-4241-9d5f-87452fd5d032)
 
 #### Host verification
 
 See when an SSH host key needs verification.
 
-![Host verification](https://github.com/user-attachments/assets/55abdfb1-cd37-4b53-88f9-f69dc520e03e)
+![Host verification](https://github.com/user-attachments/assets/ea15c612-6acd-417d-b0cf-5133dbed7e78)
 
 #### Details and logs
 
 View SSH connection logs.
 
-![Details and logs](https://github.com/user-attachments/assets/1417aa86-ce25-438a-a4e7-33d288792677)
+![Details and logs](https://github.com/user-attachments/assets/1e92d5a3-7869-4fa1-b0ed-61c12ab162c6)
 
 </details>
 
@@ -123,7 +123,7 @@ View SSH connection logs.
 
 Create your first profile.
 
-![Empty state](https://github.com/user-attachments/assets/b8c778fa-3394-4e4e-8aa4-3e39104c46eb)
+![Empty state](https://github.com/user-attachments/assets/c9038e68-0a00-4197-b9b4-19e2ad9ca7ef)
 
 </details>
 
