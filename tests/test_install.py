@@ -160,6 +160,99 @@ def test_install_waits_for_noctalia_export_before_reloading(
     assert removed["widget"] == original_widgets
 
 
+@pytest.mark.parametrize("placement", ["start", "center", "capsule", "base_capsule"])
+@pytest.mark.parametrize("owned", [False, True])
+def test_reinstall_preserves_a_moved_widget_and_removes_only_owned_placements(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, placement: str, owned: bool
+) -> None:
+    config = tmp_path / "config"
+    state = tmp_path / "state"
+    base = config / "noctalia/config.toml"
+    overlay = state / "noctalia/settings.toml"
+    base.parent.mkdir(parents=True)
+    overlay.parent.mkdir(parents=True)
+    layout = '[bar.main]\nend = ["tray"]\n'
+    if "capsule" in placement:
+        layout = '[bar.main]\nend = ["tray", "group:utilities"]\n'
+        layout += '\n[[bar.main.capsule_group]]\nid = "utilities"\nradius = 4\n'
+        layout += f'members = ["bluetooth", "{installer.WIDGET}", "network"]\n'
+    else:
+        layout += f'{placement} = ["clock", "{installer.WIDGET}"]\n'
+    base.write_text(layout if placement == "base_capsule" else '[bar.main]\nend = ["tray"]\n')
+    content = "" if placement == "base_capsule" else layout
+    content += f"\n[plugins]\nenabled = {json.dumps([installer.PLUGIN])}\n"
+    content += f'\n[widget."{installer.WIDGET}"]\ntype = "{installer.WIDGET}"\n'
+    overlay.write_text(content)
+    before = tomllib.loads(content)
+    record = state / "portforward-manager/installation.json"
+    if owned:
+        record.parent.mkdir(parents=True)
+        record.write_text(
+            json.dumps({"desktop": {"owned_widget": True, "owned_definition": False}})
+        )
+    monkeypatch.setattr(installer, "CONFIG", config)
+    monkeypatch.setattr(installer, "STATE", state)
+    monkeypatch.setattr(installer, "RECORD", record)
+    monkeypatch.setattr(installer.shutil, "which", lambda name: name)
+    monkeypatch.setattr(installer.backend, "ensure", lambda _: {})
+    monkeypatch.setattr(installer.backend, "stop_all", lambda: None)
+    monkeypatch.setattr(installer.backend, "remove", lambda: None)
+
+    def command(*args: str, **kwargs: Any) -> str:
+        if args == ("noctalia", "msg", "plugins", "source", "list"):
+            return f"{installer.SOURCE} path {installer.ROOT}\n"
+        if args == ("noctalia", "msg", "plugins", "disable", installer.PLUGIN):
+            overlay.write_text(
+                overlay.read_text().replace(
+                    f"enabled = {json.dumps([installer.PLUGIN])}", "enabled = []"
+                )
+            )
+        return ""
+
+    monkeypatch.setattr(installer, "command", command)
+    installer.install(False)
+    installer.install(False)
+    installed = tomllib.loads(overlay.read_text())
+    assert installed == before
+    assert json.loads(record.read_text())["desktop"]["owned_widget"] is owned
+    if placement != "base_capsule":
+        installer.remove()
+        removed_bar = tomllib.loads(overlay.read_text())["bar"]["main"]
+        expected = tomllib.loads(layout)["bar"]["main"]
+        if owned:
+            if placement == "capsule":
+                expected["capsule_group"][0]["members"] = ["bluetooth", "network"]
+            else:
+                expected[placement] = ["clock"]
+        assert removed_bar == expected
+
+
+def test_moved_widget_removal_preserves_other_bars_and_group_style() -> None:
+    original = f'''# Keep this comment.
+[bar.main]
+start = ["{installer.WIDGET}", "workspaces"]
+end = ["group:utilities"]
+    [[bar.main.capsule_group]]
+    id = "utilities"
+    members = ["network", "{installer.WIDGET}", "volume"]
+    radius = 4
+[bar.other]
+end = ["{installer.WIDGET}"]
+[widget.clock]
+format = "%H:%M"
+'''
+    changed = installer.remove_widget(original, "main")
+    parsed = tomllib.loads(changed)
+    assert parsed["bar"]["main"]["start"] == ["workspaces"]
+    assert parsed["bar"]["main"]["end"] == ["group:utilities"]
+    assert parsed["bar"]["main"]["capsule_group"] == [
+        {"id": "utilities", "members": ["network", "volume"], "radius": 4}
+    ]
+    assert parsed["bar"]["other"] == {"end": [installer.WIDGET]}
+    assert changed.startswith("# Keep this comment.")
+    assert changed.endswith('[widget.clock]\nformat = "%H:%M"\n')
+
+
 def test_removal_handles_a_service_unloading_after_stop(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

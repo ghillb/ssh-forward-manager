@@ -103,6 +103,49 @@ def rewrite_widget_definition(text: str, *, remove: bool = False) -> str:
     return changed
 
 
+def has_widget(settings: dict[str, Any], local: dict[str, Any], bar: str) -> bool:
+    """Find the widget in effective lanes and their capsule groups."""
+    layout = {**settings.get("bar", {}).get(bar, {}), **local.get("bar", {}).get(bar, {})}
+    items = [item for lane in ("start", "center", "end") for item in layout.get(lane, [])]
+    groups = {item.removeprefix("group:") for item in items if item.startswith("group:")}
+    for group in layout.get("capsule_group", []):
+        if group.get("id") in groups:
+            items.extend(group.get("members", []))
+    return WIDGET in items
+
+
+def remove_widget(text: str, bar: str) -> str:
+    """Remove installer-owned references even after a user moves or groups them."""
+    expected = tomllib.loads(text)
+
+    def clean(value: dict[str, Any]) -> None:
+        for key in ("start", "center", "end", "members"):
+            if key in value:
+                value[key] = [item for item in value[key] if item != WIDGET]
+        for group in value.get("capsule_group", []):
+            clean(group)
+        for monitor in value.get("monitor", {}).values():
+            clean(monitor)
+
+    clean(expected.get("bar", {}).get(bar, {}))
+
+    def remove_array(match: re.Match[str]) -> str:
+        items = tomllib.loads("items = " + match.group(2))["items"]
+        if WIDGET not in items:
+            return match.group(0)
+        return match.group(1) + json.dumps([item for item in items if item != WIDGET])
+
+    arrays = r"(?ms)^([ \t]*(?:start|center|end|members)\s*=\s*)(\[[^\]]*\])"
+    sections = (
+        rf"(?ms)^[ \t]*\[\[?bar\.{re.escape(bar)}(?:\.[^\n]*?)?\]\]?[ \t]*\n"
+        r".*?(?=^[ \t]*\[|\Z)"
+    )
+    changed = re.sub(sections, lambda match: re.sub(arrays, remove_array, match.group(0)), text)
+    if tomllib.loads(changed) != expected:
+        raise ValueError("Refusing a widget removal that changes unrelated settings.")
+    return changed
+
+
 def backup(path: Path, directory: Path) -> None:
     if path.exists():
         directory.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -140,6 +183,7 @@ def install(cli_only: bool) -> None:
     record: dict[str, Any] = json.loads(RECORD.read_text()) if RECORD.exists() else {}
     desktop: dict[str, Any] | None = None
     bars: dict[str, Any] = {}
+    settings: dict[str, Any] = {}
     if not cli_only:
         if not shutil.which("noctalia"):
             raise ValueError("Noctalia is missing. Use --cli-only for a standalone installation.")
@@ -155,10 +199,11 @@ def install(cli_only: bool) -> None:
         current = target.read_text() if target.exists() else ""
         local = tomllib.loads(current)
         items: list[str] = local.get("bar", {}).get(bar, {}).get("end", bars[bar].get("end", []))
-        owned = record.get("desktop", {}).get("owned_widget", WIDGET not in items)
-        if WIDGET not in items:
+        present = has_widget(settings, local, bar)
+        owned = record.get("desktop", {}).get("owned_widget", not present)
+        if not present:
             items = [*items, WIDGET]
-        rewrite_widget(current, bar, items)
+            rewrite_widget(current, bar, items)
         definition = local.get("widget", {}).get(WIDGET, settings.get("widget", {}).get(WIDGET))
         if definition is not None and definition.get("type") != WIDGET:
             raise ValueError("The forwarding widget name is already used by another widget.")
@@ -196,7 +241,7 @@ def install(cli_only: bool) -> None:
         current = target.read_text()
         parsed = tomllib.loads(current)
         items = parsed.get("bar", {}).get(desktop["bar"], {}).get("end", [])
-        if WIDGET not in items:
+        if not has_widget(settings, parsed, desktop["bar"]):
             if not items:
                 items = bars[desktop["bar"]].get("end", [])
             current = rewrite_widget(current, desktop["bar"], [*items, WIDGET])
@@ -226,8 +271,7 @@ def remove() -> None:
         )
         if desktop["owned_widget"] and target.exists():
             text = target.read_text()
-            items = tomllib.loads(text).get("bar", {}).get(desktop["bar"], {}).get("end", [])
-            write(target, rewrite_widget(text, desktop["bar"], [x for x in items if x != WIDGET]))
+            write(target, remove_widget(text, desktop["bar"]))
         if desktop.get("owned_definition") and target.exists():
             write(target, rewrite_widget_definition(target.read_text(), remove=True))
         command("noctalia", "msg", "config-reload")
