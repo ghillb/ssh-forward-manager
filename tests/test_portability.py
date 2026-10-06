@@ -43,6 +43,69 @@ def test_restricted_proc_reports_inspection_failure(monkeypatch: pytest.MonkeyPa
         runner.owns_listeners(os.getpid(), {3000})
 
 
+@pytest.mark.parametrize("tools_available", [False, True])
+def test_bootstrap_leaves_plugin_source_untouched(tmp_path: Path, tools_available: bool) -> None:
+    plugin = tmp_path / "plugin"
+    source = plugin / "backend"
+    shutil.copytree(
+        Path(__file__).parents[1] / "portforward",
+        plugin,
+        ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.egg-info"),
+    )
+    before = {
+        path.relative_to(plugin): (path.read_bytes() if path.is_file() else None)
+        for path in plugin.rglob("*")
+    }
+    commands = tmp_path / "commands"
+    if tools_available:
+        commands.mkdir()
+        ssh = shutil.which("ssh")
+        assert ssh is not None
+        (commands / "ssh").symlink_to(ssh)
+        # Simulate an empty user manager; do not touch the desktop's services.
+        manager = commands / "systemctl"
+        manager.write_text("#!/bin/sh\nexit 0\n")
+        manager.chmod(0o700)
+    env = {
+        **os.environ,
+        "HOME": str(tmp_path / "home"),
+        "XDG_CONFIG_HOME": str(tmp_path / "config"),
+        "XDG_DATA_HOME": str(tmp_path / "data"),
+        "XDG_STATE_HOME": str(tmp_path / "state"),
+        "XDG_RUNTIME_DIR": str(tmp_path / "runtime"),
+        "PATH": str(commands),
+    }
+    result = subprocess.run(
+        [sys.executable, "-I", str(source / "bootstrap.py")],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    after = {
+        path.relative_to(plugin): (path.read_bytes() if path.is_file() else None)
+        for path in plugin.rglob("*")
+    }
+    assert after == before
+    assert not list(source.rglob("__pycache__"))
+    assert not list(source.rglob("*.pyc"))
+    if not tools_available:
+        assert result.returncode == 1
+        assert "Required command missing: ssh" in result.stderr
+        return
+    assert result.returncode == 0, result.stderr
+    launcher = tmp_path / "home/.local/bin/portforward"
+    assert json.loads(result.stdout)["cli"] == str(launcher)
+    assert (tmp_path / "config/systemd/user/portforward@.service").is_file()
+    installed = tmp_path / "data/portforward-manager/backend"
+    assert (installed / "portforward_manager/cli.py").is_file()
+    shutil.rmtree(plugin)
+    cli = subprocess.run([str(launcher), "--help"], env=env, capture_output=True, text=True)
+    assert cli.returncode == 0, cli.stderr
+    assert "Named, loopback-only SSH forwards supervised by systemd." in cli.stdout
+    assert list(installed.rglob("*.pyc"))
+
+
 def test_bundle_survives_source_removal_and_a_minimal_path(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
