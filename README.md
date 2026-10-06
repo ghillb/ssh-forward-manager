@@ -36,13 +36,13 @@ destination. Expand a profile for its ports, browser opening and copy-address
 actions. The native Actions dropdown contains Edit, Details & logs, and Delete.
 Its popup leaves port rows in place. A sole profile expands automatically.
 Delete requires an inline confirmation. The bar chooses a compact 340px view
-for an empty list or one healthy profile
-with up to two mappings, and a 520px view for larger lists or existing errors.
-The chosen height stays stable during interaction, with scrolling for overflow.
-Add, Edit and Details open the larger view; Cancel and Back return to the compact
-view when opened from it. Noctalia v5.1 owns panel dimensions, so this experiment
-uses two native size presets rather than pixel-exact automatic sizing.
-Editing a connected profile restarts its tunnel with the saved mappings; if the new settings fail,
+for an empty list or one healthy profile with up to two mappings, and a 520px
+view for larger lists or existing errors. Add, Edit, Details, Cancel and Back
+reuse the open panel: its position and height stay stable throughout navigation.
+Forms and logs scroll inside that same panel; the editor's actions stay visible.
+Noctalia v5.1 owns panel dimensions, so the height experiment uses two native
+size presets rather than pixel-exact automatic sizing. Editing a connected
+profile restarts its tunnel with the saved mappings; if the new settings fail,
 the saved profile remains available for correction.
 
 Equivalent CLI controls:
@@ -125,8 +125,9 @@ uv build
 ```
 
 Desktop acceptance testing uses the real Noctalia panel: add/edit/delete,
-connect/disconnect, browser opening, copy-address, visible errors, and a live
-forward that survives a Noctalia restart. Reconnection tests interrupt only
+connect/disconnect, browser opening, copy-address, visible errors, navigation
+that preserves the same panel surface and geometry, and a live forward that
+survives a Noctalia restart. Reconnection tests interrupt only
 the test tunnel, never the workstation's network. Keep captures and test host
 details outside Git. License: MIT.
 

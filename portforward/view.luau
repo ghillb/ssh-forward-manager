@@ -11,17 +11,11 @@ function M.start(compact)
   local copied, copiedUntil, detailProfile = nil, 0, nil
   local sequence = 0
   local pending = nil
-  local returnCompact = false
   local render
 
   local function backToProfiles()
     form, logText = nil, nil
-    if returnCompact then
-      returnCompact = false
-      noctalia.togglePanel("ghillb/portforward:compact")
-    else
-      render()
-    end
+    render()
   end
 
   local function request(args, kind)
@@ -41,11 +35,6 @@ function M.start(compact)
   end
 
   local function edit(profile)
-    if compact then
-      noctalia.state.set("next_view", { kind = "edit", profile = profile })
-      noctalia.togglePanel("ghillb/portforward:panel")
-      return
-    end
     pendingDelete = nil
     sequence += 1
     form = { session = tostring(sequence), id = profile and profile.id or "p-" .. os.time() .. "-" .. math.random(10000, 99999),
@@ -93,11 +82,6 @@ function M.start(compact)
   end
 
   local function logs(profile)
-    if compact then
-      noctalia.state.set("next_view", { kind = "details", profile = profile })
-      noctalia.togglePanel("ghillb/portforward:panel")
-      return
-    end
     logText = ""
     detailProfile = profile
     busy = true
@@ -198,17 +182,6 @@ function M.start(compact)
     expanded = #profiles == 1 and profiles[1].id or nil
     panel.setWantsSecondTicks(false)
     noctalia.state.set("refresh", os.time())
-    if not compact then
-      local destination = noctalia.state.get("next_view")
-      noctalia.state.set("next_view", nil)
-      returnCompact = destination ~= nil
-      if destination then
-        form, logText = nil, nil
-        if destination.kind == "edit" then edit(destination.profile)
-        elseif destination.kind == "details" then logs(destination.profile) end
-        return
-      end
-    end
     render()
   end
 
