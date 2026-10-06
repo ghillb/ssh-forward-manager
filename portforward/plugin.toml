@@ -1,0 +1,26 @@
+id = "ghillb/portforward"
+name = "Port Forwarding"
+version = "0.1.0"
+plugin_api = 24
+author = "ghillb"
+license = "MIT"
+icon = "arrows-left-right"
+description = "Named SSH forwards with a standalone CLI and systemd supervision."
+tags = ["bar", "panel", "service", "network", "utility", "development"]
+dependencies = ["portforward", "ssh", "systemctl", "xdg-open"]
+
+[[service]]
+id = "status"
+entry = "service.luau"
+
+[[widget]]
+id = "indicator"
+entry = "widget.luau"
+
+[[panel]]
+id = "panel"
+entry = "panel.luau"
+width = 560
+height = 640
+open_near_click = true
+keyboard_focus = "on_demand"
