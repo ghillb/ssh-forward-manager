@@ -24,3 +24,11 @@ width = 560
 height = 520
 open_near_click = true
 keyboard_focus = "on_demand"
+
+[[panel]]
+id = "compact"
+entry = "compact.luau"
+width = 560
+height = 340
+open_near_click = true
+keyboard_focus = "on_demand"
