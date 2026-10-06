@@ -7,7 +7,7 @@ license = "MIT"
 icon = "arrows-left-right"
 description = "Named SSH forwards with a standalone CLI and systemd supervision."
 tags = ["bar", "panel", "service", "network", "utility", "development"]
-dependencies = ["portforward", "ssh", "systemctl", "xdg-open"]
+dependencies = ["python3", "ssh", "systemctl"]
 
 [[service]]
 id = "status"

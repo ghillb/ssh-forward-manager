@@ -10,6 +10,11 @@ import shutil
 import subprocess
 import sys
 import time
+
+if sys.version_info < (3, 11):  # noqa: UP036 -- direct execution needs an actionable error.
+    print("Python 3.11 or newer is required.", file=sys.stderr)
+    sys.exit(1)
+
 import tomllib
 from collections.abc import Callable
 from pathlib import Path
@@ -20,10 +25,11 @@ HOME = Path.home()
 CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", str(HOME / ".config")))
 STATE = Path(os.environ.get("XDG_STATE_HOME", str(HOME / ".local/state")))
 RECORD = STATE / "portforward-manager" / "installation.json"
-UNIT = CONFIG / "systemd/user/portforward@.service"
 PLUGIN = "ghillb/portforward"
 SOURCE = "ssh-forward-manager"
 WIDGET = f"{PLUGIN}:indicator"
+sys.path.insert(0, str(ROOT / "portforward/backend"))
+from portforward_manager import installation as backend  # noqa: E402
 
 
 def command(*argv: str, env: dict[str, str] | None = None) -> str:
@@ -117,7 +123,7 @@ def wait_export(predicate: Callable[[dict[str, Any]], bool]) -> None:
 
 
 def install(cli_only: bool) -> None:
-    for executable in ("uv", "ssh", "systemctl"):
+    for executable in ("ssh", "systemctl"):
         if not shutil.which(executable):
             raise ValueError(f"Required command missing: {executable}")
     active = command(
@@ -169,10 +175,7 @@ def install(cli_only: bool) -> None:
             "owned_definition": owned_definition,
             "backup": str(directory),
         }
-    env = {**os.environ, "UV_TOOL_BIN_DIR": str(HOME / ".local/bin")}
-    command("uv", "tool", "install", "--force", str(ROOT), env=env)
-    write(UNIT, (ROOT / "systemd/portforward@.service").read_text())
-    command("systemctl", "--user", "daemon-reload")
+    backend.ensure(ROOT / "portforward/backend")
     record["checkout"] = str(ROOT)
     if desktop:
         record["desktop"] = desktop
@@ -209,21 +212,7 @@ def remove() -> None:
     if not RECORD.exists():
         raise ValueError("No installation record found; refusing to remove unowned files.")
     record: dict[str, Any] = json.loads(RECORD.read_text())
-    units = command(
-        "systemctl",
-        "--user",
-        "list-units",
-        "portforward@*.service",
-        "--all",
-        "--no-legend",
-        "--plain",
-    )
-    for line in units.splitlines():
-        fields = line.lstrip("● ").split()
-        name = fields[0]
-        command("systemctl", "--user", "stop", name)
-        if "failed" in fields[1:4]:
-            command("systemctl", "--user", "reset-failed", name)
+    backend.stop_all()
     desktop = record.get("desktop")
     if desktop:
         target = Path(desktop["config"])
@@ -242,9 +231,7 @@ def remove() -> None:
         if desktop.get("owned_definition") and target.exists():
             write(target, rewrite_widget_definition(target.read_text(), remove=True))
         command("noctalia", "msg", "config-reload")
-    UNIT.unlink(missing_ok=True)
-    command("systemctl", "--user", "daemon-reload")
-    command("uv", "tool", "uninstall", "ssh-forward-manager")
+    backend.remove()
     RECORD.unlink()
     print("Removed. Saved profiles and configuration backups were retained.")
 

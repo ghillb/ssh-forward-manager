@@ -6,12 +6,14 @@ import os
 import queue
 import signal
 import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
 
 from .model import RUNTIME, Profile, atomic_json, check_ports, forward_spec, load, private_dir
 from .supervisor import notify, state_file
+from .tools import executable
 
 
 def master_argv(profile: Profile, path: Path) -> list[str]:
@@ -34,7 +36,7 @@ def master_argv(profile: Profile, path: Path) -> list[str]:
         "PermitLocalCommand=no",
         "GatewayPorts=no",
     ]
-    argv = ["ssh", "-NT", "-S", str(path)]
+    argv = [executable("ssh"), "-NT", "-S", str(path)]
     for option in options:
         argv.extend(["-o", option])
     return [*argv, profile["host"]]
@@ -44,7 +46,7 @@ def mux_argv(profile: Profile, path: Path, action: str) -> list[str]:
     # The master already resolved config and authenticated. A config-free mux
     # request prevents inherited forwards from being added a second time.
     argv = [
-        "ssh",
+        executable("ssh"),
         "-F",
         "/dev/null",
         "-S",
@@ -108,11 +110,16 @@ def owns_listeners(pid: int, ports: set[int]) -> bool:
         for row in Path("/proc/net/tcp").read_text().splitlines()[1:]:
             fields = row.split()
             address, hex_port = fields[1].split(":")
-            if address == "0100007F" and fields[3] == "0A" and f"socket:[{fields[9]}]" in inodes:
+            loopback = "0100007F" if sys.byteorder == "little" else "7F000001"
+            if address == loopback and fields[3] == "0A" and f"socket:[{fields[9]}]" in inodes:
                 listening.add(int(hex_port, 16))
         return ports <= listening
     except (FileNotFoundError, ProcessLookupError):
         return False
+    except OSError as error:
+        raise ValueError(
+            "Cannot inspect SSH loopback listeners in /proc. Check process-inspection permissions."
+        ) from error
 
 
 def run(profile_id: str) -> int:
@@ -225,6 +232,10 @@ def run(profile_id: str) -> int:
         publish("error" if fatal else "reconnecting", last_error)
         print(last_error, flush=True)
         return 78 if fatal else 1
+    except ValueError as error:
+        publish("error", str(error))
+        print(error, flush=True)
+        return 78
     except subprocess.TimeoutExpired:
         message = "SSH control request timed out; retrying automatically."
         publish("reconnecting", message)

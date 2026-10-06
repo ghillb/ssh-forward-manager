@@ -7,8 +7,7 @@ Saving a profile does not connect it. Autoconnect is not currently supported.
 
 ## Demo
 
-Create profiles, manage connections, and access forwarded ports from your
-Noctalia bar. Watch the 24-second walkthrough or expand the screenshots below.
+Watch the 24-second walkthrough or expand the screenshots below.
 
 https://github.com/user-attachments/assets/a760432b-5c6e-403a-b22f-cb1039b051eb
 
@@ -130,9 +129,12 @@ Create your first profile.
 
 ## Install
 
-Requires Linux with systemd user services, OpenSSH, Python 3.12+ and uv. The panel
-requires Noctalia v5 with plugin API 24. Browser opening uses xdg-open; CLI copy
-uses wl-copy on Wayland.
+Requires Linux with systemd user services, Python 3.11+ and OpenSSH 8.7+.
+The panel requires Noctalia v5 with plugin API 24 or newer. The plugin includes
+its CLI; installation needs no root access or separate Python packages.
+
+Optional tools: `xdg-open` for browser opening, `wl-copy` for CLI clipboard
+copying, and `journalctl` for logs.
 
 ```sh
 git clone https://github.com/ghillb/ssh-forward-manager.git
@@ -140,27 +142,28 @@ cd ssh-forward-manager
 python3 install.py
 ```
 
-This installs the CLI and user service template, registers the repository as a
-local Noctalia plugin source, enables `ghillb/portforward`, and adds its widget
-to the first configured bar. Existing settings and widgets are preserved;
-changed configuration files are backed up outside the repository. Use
-`python3 install.py --cli-only` to omit desktop integration. No root access is
-needed. Keep the checkout available while using the local plugin source.
-Run desktop installation and removal while Noctalia is running, so its own
-plugin controls can persist the changes. CLI-only installation needs no bar.
+The installer enables the plugin and adds its widget to your first configured
+bar, preserving existing settings and backing up changed files. Keep Noctalia
+running during installation and removal, and retain the checkout while using
+this local plugin source. Use `python3 install.py --cli-only` for CLI-only use.
+
+Add `~/.local/bin` to your shell's PATH if needed. Run `portforward doctor` to
+check setup. If the panel reports a setup error, correct it and re-enable the
+plugin. Before upgrading a uv-based installation, remove it using its original
+installer; saved profiles are retained.
+
+Disconnect profiles before rerunning the installer to update. Plugin-manager
+updates also wait until profiles are disconnected; the panel shows pending updates.
 
 ## Use
 
-Click the forwarding icon in the bar. Add a name, SSH alias or `user@host`, and
-one or more local-port → remote-host:remote-port mappings. Remote hosts are
-resolved from the SSH server. Use Check host to preview OpenSSH's resolved
-destination. Expand a profile for its ports, browser opening and copy-address
-actions. The Actions menu contains Edit, Details & logs, and Delete. A sole
-profile expands automatically. Deleting a profile requires confirmation.
-The panel adjusts its initial height to your profiles and keeps its position
-and size while you navigate. Forms and logs scroll within the panel.
-Editing a connected profile restarts its tunnel with the saved mappings; if the
-new settings fail, the saved profile remains available for correction.
+Click the bar widget, add a profile name, SSH alias or `user@host`, and one or
+more port mappings, then select Connect. Remote hosts are resolved from the SSH
+server. Check host previews your SSH destination. Expand a profile to open or
+copy its addresses; use Actions to edit, view logs, or delete it.
+
+Saving a new profile leaves it disconnected. Editing a connected profile
+briefly restarts its tunnel with the saved mappings.
 
 Equivalent CLI controls:
 
@@ -168,6 +171,7 @@ Equivalent CLI controls:
 portforward add development --name Development --host devbox \
   --map 3000:localhost:3000 --map 5432:localhost:5432
 portforward resolve devbox
+portforward doctor
 portforward connect development
 portforward status
 portforward address development 3000
@@ -186,70 +190,54 @@ browser scheme when replacing mappings. Forwarding itself is protocol-agnostic.
 
 ## Connection behavior
 
-Listeners bind to `127.0.0.1` only. Configured local ports are preserved. A
-conflict reports the requested port instead of assigning a replacement. The
-panel identifies current listening processes when Linux allows inspection;
-process arguments are never collected. All mappings must be established before
-the profile reports Connected. This means
-the tunnel is ready, not that the destination application is healthy; a remote
-connection refusal is shown as a diagnostic without stopping other ports.
+Listeners bind to `127.0.0.1`. Port conflicts are reported without changing your
+configured ports. Connected confirms that all local listeners are ready; remote
+applications must also be running. Each connection forwards only its profile's
+mappings, ignoring any forwards defined in SSH config.
 
-SSH uses the existing config, keys, known-host policy and ssh-agent. No passwords
-or keys are stored by this project. Unlock encrypted keys with your normal
-ssh-agent before connecting. First-time host-key confirmation and changes to
-trusted host keys must be resolved with ordinary SSH in a terminal. The panel
-never requests credentials or weakens host-key verification.
+SSH reuses your config, keys, known hosts and agent. No passwords or keys are
+stored. Unlock encrypted keys with your SSH agent and confirm new or changed
+host keys through SSH in a terminal before connecting.
 
-The SSH connection is dedicated to the profile. Existing config forwards are
-cleared from that connection; only the profile's mappings are then added through
-OpenSSH's control socket. Other SSH sessions and config files are untouched.
-
-Keepalives detect an unresponsive SSH peer in roughly 20–30 seconds. Systemd then
-retries every five seconds. Authentication, host-key and local-port errors pause
-retries until corrected and Connect is selected again. Disconnect cancels all
-retries. Connections survive Noctalia reload, shutdown and restart; user-session
-shutdown and machine shutdown still stop user services. Established application
-TCP sessions cannot survive a lost SSH transport; applications must reconnect.
+Connections survive Noctalia restarts. Systemd reconnects after interruptions;
+authentication, host-key and port errors require correction before retrying.
+Disconnect cancels retries. Tunnels stop when your systemd user session or
+machine shuts down. Applications must reconnect after a lost SSH transport.
 
 ## Storage and removal
 
 Profiles: `$XDG_CONFIG_HOME/portforward/profiles.json` (default `~/.config`).
 Diagnostics: `$XDG_STATE_HOME/portforward-manager` (default `~/.local/state`).
 Control sockets and agent socket references: `$XDG_RUNTIME_DIR/portforward-manager`.
+Backend source: `$XDG_DATA_HOME/portforward-manager/backend` (default `~/.local/share`).
+CLI: `~/.local/bin/portforward`. Service: `$XDG_CONFIG_HOME/systemd/user/portforward@.service`.
 Directories are private and profile files are mode 0600.
 
 ```sh
 python3 install.py --remove
 ```
 
-Removal stops the project's tunnels, removes its widget, plugin source, service
-template and CLI. Other desktop settings remain intact. Saved profiles and
-configuration backups are retained; remove those directories yourself if no
-longer needed. Upgrades use the same install command and require tunnels to be
-disconnected first.
+Checkout removal stops tunnels and removes the CLI, service, widget and local
+plugin source. Saved profiles and configuration backups are retained.
 
-## Build and verify
+For plugin-manager installations, disable the plugin, run
+`~/.local/bin/portforward uninstall`, then remove the plugin in Noctalia.
+Removing the plugin alone leaves the CLI and any tunnels running. Backend
+removal stops tunnels and retains saved profiles.
+
+## Development
 
 ```sh
 uv sync
 uv run pre-commit install
-uv run ruff check src tests install.py
+uv run ruff check portforward/backend tests install.py
 uv run pyright
 uv run pytest
 noctalia plugins lint portforward
 uv build
 ```
 
-## Noctalia integration
-
-The plugin ID follows Noctalia's `<author>/<plugin>` convention. This repository's
-catalog exposes `ghillb/portforward`; its panel is
-`ghillb/portforward:panel` and its bar widget is `ghillb/portforward:indicator`.
-The Noctalia plugin uses the CLI to manage profiles and display connection
-status. Systemd supervises the SSH connections independently of the bar.
-OpenSSH resolves SSH aliases through `ssh -G`.
-
-The plugin requires the backend installed by `python3 install.py`.
-See Noctalia's [development workflow](https://docs.noctalia.dev/noctalia/plugins/development/workflow/),
-[runtime API](https://docs.noctalia.dev/noctalia/plugins/development/runtime-api/),
-and [community catalog](https://github.com/noctalia-dev/community-plugins/blob/main/catalog.toml).
+The CLI source is in `portforward/backend`. The plugin uses the CLI for controls
+and status; systemd supervises SSH independently of Noctalia.
+See the [Noctalia plugin API](https://docs.noctalia.dev/noctalia/plugins/development/runtime-api/)
+for integration details.

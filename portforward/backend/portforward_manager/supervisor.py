@@ -11,10 +11,17 @@ from typing import Any
 
 from .diagnostics import describe
 from .model import RUNTIME, STATE, Profile, atomic_json, check_ports, private_dir, valid_id
+from .tools import executable
 
 
 def command(argv: list[str], *, timeout: int = 15) -> str:
-    result = subprocess.run(argv, capture_output=True, text=True, timeout=timeout, check=False)
+    result = subprocess.run(
+        [executable(argv[0]), *argv[1:]],
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=False,
+    )
     if result.returncode:
         raise ValueError(
             result.stderr.strip() or result.stdout.strip() or f"Command failed: {argv[0]}"
@@ -123,6 +130,9 @@ def agent_environment(profile_id: str) -> None:
 
 
 def connect(profile: Profile) -> None:
+    from .tools import require_ready
+
+    require_ready()
     profile_id = profile["id"]
     if running(profile_id):
         return

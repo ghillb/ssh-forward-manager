@@ -5,7 +5,7 @@ StartLimitIntervalSec=0
 [Service]
 Type=notify
 NotifyAccess=main
-ExecStart=%h/.local/bin/portforward _run %i
+ExecStart=@LAUNCHER@ _run %i
 EnvironmentFile=-%t/portforward-manager/agent-%i.env
 Restart=always
 RestartSec=5

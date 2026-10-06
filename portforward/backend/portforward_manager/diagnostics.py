@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 from typing import TypedDict
 
@@ -35,10 +36,12 @@ def conflicts(ports: set[int], proc: Path = Path("/proc")) -> list[Conflict]:
             local_port = int(value, 16)
             # Wildcard IPv6 may be dual-stack; an attempted bind remains authoritative.
             if local_port in ports and address in (
-                "0100007F",
+                "0100007F" if sys.byteorder == "little" else "7F000001",
                 "00000000",
                 "0" * 32,
-                "0000000000000000FFFF00000100007F",
+                "0000000000000000FFFF00000100007F"
+                if sys.byteorder == "little"
+                else "00000000000000000000FFFF7F000001",
             ):
                 sockets[f"socket:[{fields[9]}]"] = local_port
     owners: dict[int, set[str]] = {value: set() for value in sockets.values()}

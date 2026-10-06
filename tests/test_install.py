@@ -102,7 +102,12 @@ def test_install_waits_for_noctalia_export_before_reloading(
     monkeypatch.setattr(installer, "CONFIG", config)
     monkeypatch.setattr(installer, "STATE", state)
     monkeypatch.setattr(installer, "RECORD", record)
-    monkeypatch.setattr(installer, "UNIT", config / "systemd/user/portforward@.service")
+    monkeypatch.setattr(installer.backend, "HOME", tmp_path / "home")
+    monkeypatch.setattr(installer.backend, "TARGET", tmp_path / "data/backend")
+    monkeypatch.setattr(installer.backend, "LAUNCHER", tmp_path / "home/.local/bin/portforward")
+    monkeypatch.setattr(installer.backend, "UNIT", config / "systemd/user/portforward@.service")
+    monkeypatch.setattr(installer.backend, "RECORD", state / "portforward-manager/backend.json")
+    monkeypatch.setattr(installer.backend.tools, "require_ready", lambda: {})
     monkeypatch.setattr(installer.shutil, "which", lambda name: name)
     exports = []
 
@@ -132,6 +137,9 @@ def test_install_waits_for_noctalia_export_before_reloading(
         return ""
 
     monkeypatch.setattr(installer, "command", command)
+    monkeypatch.setattr(
+        installer.backend, "command", lambda *args: command("systemctl", "--user", *args)
+    )
     try:
         installer.install(False)
     finally:
@@ -162,7 +170,14 @@ def test_removal_handles_a_service_unloading_after_stop(
     profiles = tmp_path / "profiles.json"
     profiles.write_text('{"version": 1, "profiles": []}')
     monkeypatch.setattr(installer, "RECORD", record)
-    monkeypatch.setattr(installer, "UNIT", unit)
+    target = tmp_path / "backend"
+    target.mkdir()
+    backend_record = tmp_path / "backend.json"
+    backend_record.write_text(json.dumps({"target": str(target)}))
+    monkeypatch.setattr(installer.backend, "RECORD", backend_record)
+    monkeypatch.setattr(installer.backend, "UNIT", unit)
+    monkeypatch.setattr(installer.backend, "TARGET", target)
+    monkeypatch.setattr(installer.backend, "LAUNCHER", tmp_path / "portforward")
     events = []
 
     def command(*args: str, **kwargs: Any) -> str:
@@ -174,6 +189,9 @@ def test_removal_handles_a_service_unloading_after_stop(
         return ""
 
     monkeypatch.setattr(installer, "command", command)
+    monkeypatch.setattr(
+        installer.backend, "command", lambda *args: command("systemctl", "--user", *args)
+    )
     installer.remove()
     assert ("systemctl", "--user", "stop", "portforward@test.service") in events
     assert not unit.exists() and not record.exists()

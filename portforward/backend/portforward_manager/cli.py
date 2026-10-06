@@ -12,6 +12,7 @@ from typing import Any
 
 from .model import RUNTIME, Profile, load, save, transaction, valid_id, validate
 from .supervisor import connect, control, resolve, running, state_file, status
+from .tools import executable
 
 
 def parser() -> argparse.ArgumentParser:
@@ -19,6 +20,8 @@ def parser() -> argparse.ArgumentParser:
         description="Named, loopback-only SSH forwards supervised by systemd."
     )
     sub = root.add_subparsers(dest="action", required=True)
+    sub.add_parser("doctor", help="Check runtime prerequisites and optional desktop tools")
+    sub.add_parser("uninstall", help="Stop forwards and remove the backend; retains saved profiles")
     for action in ("list", "status"):
         sub.add_parser(action, help="Print profiles and connection status as JSON")
     sub.add_parser("resolve", help="Preview settings resolved by OpenSSH").add_argument("host")
@@ -70,6 +73,17 @@ def put(profiles: dict[str, Profile], profile: Profile) -> None:
 
 def execute(args: argparse.Namespace) -> object:
     action = args.action
+    if action == "doctor":
+        from .tools import doctor
+
+        report = doctor()
+        print(json.dumps(report))
+        return 0 if report["ok"] else 1
+    if action == "uninstall":
+        from .installation import remove
+
+        remove()
+        return {"ok": True, "message": "Backend removed. Saved profiles were retained."}
     if action in ("status", "list"):
         return status(load())
     if action == "resolve":
@@ -82,7 +96,8 @@ def execute(args: argparse.Namespace) -> object:
         from .supervisor import unit
 
         result = subprocess.run(
-            ["journalctl", "--user", "-u", unit(args.id), "-n", "60", "--no-pager"], check=False
+            [executable("journalctl"), "--user", "-u", unit(args.id), "-n", "60", "--no-pager"],
+            check=False,
         )
         return result.returncode
     with transaction() as profiles:
@@ -131,12 +146,15 @@ def execute(args: argparse.Namespace) -> object:
                     return None
                 if action == "copy":
                     subprocess.run(
-                        ["wl-copy", "--type", "text/plain"], input=address, text=True, check=True
+                        [executable("wl-copy"), "--type", "text/plain"],
+                        input=address,
+                        text=True,
+                        check=True,
                     )
                 elif action == "open":
                     with tempfile.TemporaryFile(mode="w+") as errors:
                         result = subprocess.run(
-                            ["xdg-open", f"{mapping['scheme']}://{address}"],
+                            [executable("xdg-open"), f"{mapping['scheme']}://{address}"],
                             stdin=subprocess.DEVNULL,
                             stdout=subprocess.DEVNULL,
                             stderr=errors,

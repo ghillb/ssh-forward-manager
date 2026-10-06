@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "ssh-forward-manager"
 version = "0.1.0"
 description = "Named SSH forwards with systemd supervision and optional Noctalia controls"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 license = "MIT"
 readme = "README.md"
 dependencies = []
@@ -18,20 +18,24 @@ portforward = "portforward_manager.cli:main"
 dev = ["pytest>=8", "ruff>=0.9", "pyright>=1.1", "pre-commit>=4"]
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["portforward/backend"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["portforward/backend"]
 testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py312"
+target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
 
+[tool.ruff.lint.isort]
+known-first-party = ["portforward_manager"]
+
 [tool.pyright]
-include = ["src", "install.py"]
-pythonVersion = "3.12"
+include = ["portforward/backend", "install.py"]
+extraPaths = ["portforward/backend"]
+pythonVersion = "3.11"
 typeCheckingMode = "strict"
