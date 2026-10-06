@@ -173,6 +173,8 @@ end
 
 function onOpen()
   menu, pendingDelete, copied = nil, nil, nil
+  local profiles = snapshot.profiles or {}
+  expanded = #profiles == 1 and profiles[1].id or nil
   panel.setWantsSecondTicks(false)
   noctalia.state.set("refresh", os.time())
   render()
@@ -186,7 +188,14 @@ function update()
   end
 end
 
-noctalia.state.watch("snapshot", function(value) snapshot = value or snapshot; render() end)
+noctalia.state.watch("snapshot", function(value)
+  local previousCount = #(snapshot.profiles or {})
+  snapshot = value or snapshot
+  local profiles = snapshot.profiles or {}
+  if #profiles == 1 and previousCount ~= 1 then expanded = profiles[1].id end
+  if #profiles == 0 then expanded = nil end
+  render()
+end)
 noctalia.state.watch("busy", function(value) busy = value or false; render() end)
 noctalia.state.watch("result", function(result)
   if not pending or result.token ~= pending.token then return end
