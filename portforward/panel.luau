@@ -1,9 +1,11 @@
 --!nonstrict
 local editor = require("./editor.luau")
+local cards = require("./cards.luau")
 local tr = noctalia.tr
 local snapshot = noctalia.state.get("snapshot") or { profiles = {} }
 local busy = noctalia.state.get("busy") or false
-local expanded, pendingDelete, form, logText = nil, nil, nil, nil
+local expanded, pendingDelete, form, logText, menu = nil, nil, nil, nil, nil
+local copied, copiedUntil, detailProfile = nil, 0, nil
 local sequence = 0
 local pending = nil
 
@@ -24,6 +26,7 @@ local function newMapping(key, mapping)
 end
 
 local function edit(profile)
+  menu, pendingDelete = nil, nil
   sequence += 1
   form = { session = tostring(sequence), id = profile and profile.id or "p-" .. os.time() .. "-" .. math.random(10000, 99999),
     existing = profile ~= nil, live = profile and (profile.state == "connected" or profile.state == "connecting" or profile.state == "reconnecting"),
@@ -38,6 +41,7 @@ local function edit(profile)
 end
 
 local function saveForm()
+  if not editor.validate(form) then render(); return end
   local mappings = {}
   for _, mapping in ipairs(form.mappings) do
     table.insert(mappings, { local_port = tonumber(mapping.local_port) or 0,
@@ -48,18 +52,18 @@ local function saveForm()
 end
 
 local function resolveHost()
-  if form.host == "" then form.error = tr("editor.host_required"); render(); return end
+  if form.host == "" then form.hostError = tr("editor.host_required"); render(); return end
   busy = true
   render()
   local accepted = noctalia.runAsync({ noctalia.expandPath("~/.local/bin/portforward"), "resolve", form.host }, function(result)
     busy = false
     if not form then return end
-    if result.exitCode ~= 0 then form.error = result.stderr; render(); return end
+    if result.exitCode ~= 0 then form.hostError = result.stderr; render(); return end
     local settings = noctalia.json.decode(result.stdout)
     if settings then
       form.resolved = (settings.user or "") .. " @ " .. (settings.hostname or "") .. " · SSH " .. (settings.port or "22")
       if settings.proxyjump then form.resolved ..= " · " .. settings.proxyjump end
-      form.error = nil
+      form.hostError = nil
     else
       form.error = tr("backend.invalid")
     end
@@ -69,6 +73,8 @@ local function resolveHost()
 end
 
 local function logs(profile)
+  menu = nil
+  detailProfile = profile
   busy = true
   render()
   local accepted = noctalia.runAsync({ noctalia.expandPath("~/.local/bin/portforward"), "logs", profile.id }, function(result)
@@ -80,73 +86,44 @@ local function logs(profile)
 end
 
 local function profileCard(profile)
-  local open = expanded == profile.id
   local active = profile.state == "connected" or profile.state == "connecting" or profile.state == "reconnecting"
-  local color = profile.state == "error" and "error" or profile.state == "connected" and "primary" or "on_surface_variant"
-  local rows = {
-    ui.row({ gap = 8, align = "center", paddingH = 10, paddingV = 10 }, {
-      ui.button({ glyph = open and "chevron-down" or "chevron-right", variant = "ghost",
-        tooltip = tr("expand"), width = 30, onClick = function()
-          if open then expanded = nil else expanded = profile.id end
-          pendingDelete = nil
-          render()
-        end }),
-      ui.column({ flexGrow = 1, gap = 3 }, {
-        ui.label({ text = profile.name, fontWeight = "medium" }),
-        ui.label({ text = profile.host .. " · " .. #profile.mappings .. " " .. tr("ports"), color = "on_surface_variant", fontSize = 12 }),
-        ui.label({ text = tr("state." .. profile.state), color = color, fontSize = 12 }),
-      }),
-      ui.button({ text = active and tr("disconnect") or profile.state == "error" and tr("retry") or tr("connect"),
-        variant = active and "outline" or "primary", enabled = not busy,
-        onClick = function() request({ active and "disconnect" or "connect", profile.id }, "control") end }),
-    }),
-  }
-  if open then
-    table.insert(rows, ui.separator({ color = "outline" }))
-    if profile.error ~= "" then
-      table.insert(rows, ui.column({ paddingH = 12, paddingV = 6 }, {
-        ui.label({ text = profile.error, color = profile.state == "error" and "error" or "on_surface_variant", fontSize = 12 }),
-      }))
-    end
-    if profile.state == "reconnecting" then
-      table.insert(rows, ui.column({ paddingH = 12 }, {
-        ui.label({ text = tr("reconnecting_hint"), color = "on_surface_variant", fontSize = 12 }),
-      }))
-    end
-    for _, mapping in ipairs(profile.mappings) do
-      local address = "127.0.0.1:" .. mapping.local_port
-      table.insert(rows, ui.row({ key = profile.id .. ":" .. mapping.local_port, gap = 8, align = "center", paddingH = 12, paddingV = 6 }, {
-        ui.column({ flexGrow = 1, gap = 3 }, {
-          ui.label({ text = address, fontSize = 13 }),
-          ui.label({ text = "→ " .. mapping.remote_host .. ":" .. mapping.remote_port, color = "on_surface_variant", fontSize = 12 }),
-        }),
-        ui.button({ text = tr("open"), glyph = "external-link", variant = "ghost", enabled = not busy and profile.state == "connected",
-          onClick = function() request({ "open", profile.id, tostring(mapping.local_port) }, "control") end }),
-        ui.button({ text = tr("copy"), glyph = "copy", variant = "ghost", onClick = function()
-          if noctalia.copyToClipboard(address, "text/plain") then noctalia.notify(tr("title"), tr("copied")) end
-        end }),
-      }))
-    end
-    table.insert(rows, ui.row({ gap = 6, paddingH = 10, paddingV = 6, justify = "end" }, {
-      ui.button({ text = tr("logs"), variant = "ghost", enabled = not busy, onClick = function() logs(profile) end }),
-      ui.button({ text = tr("edit"), variant = "ghost", enabled = not busy, onClick = function() edit(profile) end }),
-      ui.button({ text = pendingDelete == profile.id and tr(active and "disconnect_delete" or "confirm_delete") or tr("delete"),
-        variant = pendingDelete == profile.id and "destructive" or "ghost", enabled = not busy,
-        onClick = function()
-          if pendingDelete == profile.id then request({ "delete", profile.id }, "delete")
-          else pendingDelete = profile.id; render() end
-        end }),
-      ui.button({ text = tr("cancel"), variant = "ghost", visible = pendingDelete == profile.id,
-        enabled = not busy, onClick = function() pendingDelete = nil; render() end }),
-    }))
-  end
-  return ui.column({ key = profile.id, gap = 0, fill = "surface_variant", radius = 6,
-    border = "outline", borderWidth = 1 }, rows)
+  return cards.render(profile, {
+    expanded = expanded == profile.id, menu = menu == profile.id, pendingDelete = pendingDelete == profile.id,
+    copied = copied, busy = busy,
+  }, {
+    expand = function()
+      if expanded == profile.id then expanded = nil else expanded = profile.id end
+      menu, pendingDelete = nil, nil
+      render()
+    end,
+    menu = function()
+      if menu == profile.id then menu = nil else menu = profile.id end
+      pendingDelete = nil
+      render()
+    end,
+    edit = function() edit(profile) end,
+    details = function() logs(profile) end,
+    delete = function() menu = nil; pendingDelete = profile.id; render() end,
+    cancelDelete = function() pendingDelete = nil; render() end,
+    confirmDelete = function() request({ "delete", profile.id }, "delete") end,
+    control = function() menu, pendingDelete = nil, nil; request({ active and "disconnect" or "connect", profile.id }, "control") end,
+    open = function(port) request({ "open", profile.id, tostring(port) }, "control") end,
+    copy = function(port, address)
+      if noctalia.copyToClipboard(address, "text/plain") then
+        copied, copiedUntil = profile.id .. ":" .. port, noctalia.nowMs() + 1800
+        panel.setWantsSecondTicks(true)
+        render()
+      else
+        noctalia.notifyError(tr("title"), tr("copy_failed"))
+      end
+    end,
+  })
 end
 
 function render()
   if form then
     panel.render(editor.render(form, busy, {
+      changed = function() render() end,
       cancel = function() form = nil; render() end, save = saveForm, resolve = resolveHost,
       addPort = function()
         table.insert(form.mappings, newMapping(form.nextKey)); form.nextKey += 1; render()
@@ -156,38 +133,57 @@ function render()
     return
   end
   if logText then
-    panel.render(ui.column({ flexGrow = 1, gap = 12, paddingH = 16, paddingV = 14 }, {
+    panel.render(ui.column({ key = "details", flexGrow = 1, gap = 12, paddingH = 16, paddingV = 14 }, {
       ui.row({ gap = 8, align = "center" }, {
-        ui.button({ glyph = "arrow-left", tooltip = tr("back"), variant = "ghost", onClick = function() logText = nil; render() end }),
-        ui.label({ text = tr("logs"), fontSize = 17 }),
+        ui.button({ key = "details-back", glyph = "arrow-left", tooltip = tr("back"), variant = "ghost",
+          enabled = true, onClick = function() logText = nil; render() end }),
+        ui.label({ text = tr("details"), fontSize = 17, fontWeight = "medium" }),
       }),
-      ui.scroll({ flexGrow = 1 }, { ui.label({ text = logText, fontSize = 12 }) }),
+      ui.scroll({ flexGrow = 1 }, { ui.column({ gap = 12 }, {
+        ui.label({ text = detailProfile.name, fontSize = 15, fontWeight = "semibold" }),
+        ui.label({ text = detailProfile.error or "", color = "on_surface_variant", fontSize = 12, visible = detailProfile.error ~= "" }),
+        ui.label({ text = tr("logs"), fontWeight = "medium" }),
+        ui.label({ text = logText, fontSize = 12, fontFamily = "monospace" }),
+      }) }),
     }))
     return
   end
-  local cards = {}
-  for _, profile in ipairs(snapshot.profiles or {}) do table.insert(cards, profileCard(profile)) end
-  if snapshot.error then table.insert(cards, ui.label({ text = snapshot.error, color = "error" })) end
-  if #cards == 0 then table.insert(cards, ui.label({ text = tr("empty"), color = "on_surface_variant" })) end
-  panel.render(ui.column({ flexGrow = 1, gap = 0 }, {
-    ui.row({ gap = 10, align = "center", paddingH = 16, paddingV = 16 }, {
-      ui.glyph({ name = "arrows-left-right", size = 20 }),
-      ui.label({ text = tr("title"), fontSize = 17, fontWeight = "medium", flexGrow = 1 }),
-      ui.button({ text = tr("add"), glyph = "plus", variant = "primary", enabled = not busy, onClick = function() edit(nil) end }),
-      ui.button({ glyph = "x", tooltip = tr("close"), variant = "ghost", onClick = function() panel.close() end }),
-    }),
-    ui.scroll({ flexGrow = 1 }, { ui.column({ gap = 10, paddingH = 16, paddingV = 4 }, cards) }),
-    ui.separator({ color = "outline" }),
+  local profiles = {}
+  for _, profile in ipairs(snapshot.profiles or {}) do table.insert(profiles, profileCard(profile)) end
+  if snapshot.error then table.insert(profiles, ui.label({ text = snapshot.error, color = "error" })) end
+  if #profiles == 0 then
+    table.insert(profiles, ui.column({ paddingV = 30, gap = 12, align = "center" }, {
+      ui.glyph({ name = "arrows-left-right", size = 30, color = "on_surface_variant" }),
+      ui.label({ text = tr("empty_title"), fontSize = 15, fontWeight = "medium" }),
+      ui.label({ text = tr("empty"), fontSize = 12, color = "on_surface_variant", textAlign = "center" }),
+      ui.button({ text = tr("add_profile"), glyph = "plus", variant = "primary", onClick = function() edit(nil) end }),
+    }))
+  end
+  panel.render(ui.column({ key = "profiles", flexGrow = 1, gap = 0 }, {
     ui.row({ gap = 8, align = "center", paddingH = 16, paddingV = 12 }, {
-      ui.glyph({ name = "lock", size = 14 }),
-      ui.label({ text = tr("loopback"), color = "on_surface_variant", fontSize = 12 }),
+      ui.glyph({ name = "arrows-left-right", size = 20, color = "on_surface_variant" }),
+      ui.label({ text = tr("title"), fontSize = 17, fontWeight = "medium", flexGrow = 1 }),
+      ui.button({ glyph = "plus", tooltip = tr("add_profile"), variant = "ghost", width = 32, controlSize = "sm",
+        enabled = not busy, onClick = function() edit(nil) end }),
+      ui.button({ glyph = "x", tooltip = tr("close"), variant = "ghost", width = 32, controlSize = "sm", onClick = function() panel.close() end }),
     }),
+    ui.scroll({ flexGrow = 1 }, { ui.column({ gap = 10, paddingH = 16, paddingV = 4 }, profiles) }),
   }))
 end
 
 function onOpen()
+  menu, pendingDelete, copied = nil, nil, nil
+  panel.setWantsSecondTicks(false)
   noctalia.state.set("refresh", os.time())
   render()
+end
+
+function update()
+  if copied and noctalia.nowMs() >= copiedUntil then
+    copied = nil
+    panel.setWantsSecondTicks(false)
+    render()
+  end
 end
 
 noctalia.state.watch("snapshot", function(value) snapshot = value or snapshot; render() end)
@@ -196,10 +192,11 @@ noctalia.state.watch("result", function(result)
   if not pending or result.token ~= pending.token then return end
   if result.ok then
     if pending.kind == "save" then expanded = form.id; form = nil end
+    if pending.kind == "delete" then expanded = nil end
     pendingDelete = nil
   elseif form then
     form.error = result.error
-  else
+  elseif pending.kind ~= "control" or string.find(result.error or "", "Cannot listen", 1, true) == nil then
     noctalia.notifyError(tr("title"), result.error)
   end
   pending = nil

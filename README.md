@@ -32,10 +32,12 @@ plugin controls can persist the changes. CLI-only installation needs no bar.
 Click the forwarding icon in the bar. Add a name, SSH alias or `user@host`, and
 one or more local-port → remote-host:remote-port mappings. Remote hosts are
 resolved from the SSH server. Use Check host to preview OpenSSH's resolved
-destination. Expand a profile for its ports, Copy, Open, Edit, Delete and Logs.
-Delete requires an inline confirmation. Editing a connected profile restarts
-its tunnel with the saved mappings; if the new settings fail, the saved profile
-remains available for correction.
+destination. Expand a profile for its ports, browser opening and copy-address
+actions. The three-dot action menu contains Edit, Details & logs, and Delete.
+Delete requires an inline confirmation. The panel uses a stable fixed height
+with scrolling; Noctalia owns its dimensions and placement. Editing a connected
+profile restarts its tunnel with the saved mappings; if the new settings fail,
+the saved profile remains available for correction.
 
 Equivalent CLI controls:
 
@@ -62,8 +64,10 @@ browser scheme when replacing mappings. Forwarding itself is protocol-agnostic.
 ## Connection behavior
 
 Listeners bind to `127.0.0.1` only. Configured local ports are preserved. A
-conflict reports the requested port instead of assigning a replacement. All
-mappings must be established before the profile reports Connected. This means
+conflict reports the requested port instead of assigning a replacement. The
+panel identifies current listening processes when Linux allows inspection;
+process arguments are never collected. All mappings must be established before
+the profile reports Connected. This means
 the tunnel is ready, not that the destination application is healthy; a remote
 connection refusal is shown as a diagnostic without stopping other ports.
 

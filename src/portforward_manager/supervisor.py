@@ -9,6 +9,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from .diagnostics import describe
 from .model import RUNTIME, STATE, Profile, atomic_json, check_ports, private_dir, valid_id
 
 
@@ -94,6 +95,7 @@ def status(profiles: dict[str, Profile]) -> dict[str, Any]:
                 **profile,
                 "state": phase,
                 "error": error,
+                "issue": describe(profile, error) if error else None,
                 "pid": pid,
                 "restarts": int(details.get("NRestarts", "0")),
             }

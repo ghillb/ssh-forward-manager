@@ -3,7 +3,7 @@ local function apply(snapshot)
   local connected, errors, retrying = 0, 0, 0
   for _, profile in ipairs(snapshot.profiles or {}) do
     if profile.state == "connected" then connected += 1 end
-    if profile.state == "error" or profile.error ~= "" then errors += 1 end
+    if profile.state == "error" then errors += 1 end
     if profile.state == "connecting" or profile.state == "reconnecting" then retrying += 1 end
   end
   if snapshot.error then errors += 1 end
