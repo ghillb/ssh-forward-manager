@@ -60,8 +60,30 @@ def test_malformed_config_is_not_written(tmp_path: Path) -> None:
     assert path.read_text() == original
 
 
+@pytest.mark.parametrize("quote", ['"', "'"])
+def test_widget_definition_preserves_existing_settings_and_removes_owned_blocks(quote: str) -> None:
+    original = '# Keep this comment.\n[widget.clock]\nformat = "%H:%M"\n'
+    registered = installer.rewrite_widget_definition(original)
+    assert tomllib.loads(registered)["widget"][installer.WIDGET]["type"] == installer.WIDGET
+    assert installer.rewrite_widget_definition(registered) == registered
+    customized = registered.replace(f'"{installer.WIDGET}"', f"{quote}{installer.WIDGET}{quote}")
+    customized += f'\n[widget.{quote}{installer.WIDGET}{quote}.actions]\nright = "none"\n'
+    customized += '\n[theme]\nmode = "dark"\n'
+    assert installer.rewrite_widget_definition(customized) == customized
+    removed = installer.rewrite_widget_definition(customized, remove=True)
+    assert tomllib.loads(removed) == {**tomllib.loads(original), "theme": {"mode": "dark"}}
+    assert removed.startswith("# Keep this comment.")
+
+
+def test_widget_definition_refuses_to_overwrite_another_widget() -> None:
+    original = f'[widget."{installer.WIDGET}"]\ntype = "clock"\n'
+    with pytest.raises(ValueError, match="already used"):
+        installer.rewrite_widget_definition(original)
+
+
+@pytest.mark.parametrize("existing_definition", [False, True])
 def test_install_waits_for_noctalia_export_before_reloading(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, existing_definition: bool
 ) -> None:
     config = tmp_path / "config"
     state = tmp_path / "state"
@@ -70,7 +92,12 @@ def test_install_waits_for_noctalia_export_before_reloading(
     base.parent.mkdir(parents=True)
     overlay.parent.mkdir(parents=True)
     base.write_text('[bar.main]\nend = ["tray"]\n')
-    overlay.write_text('[bar.main]\nend = ["tray"]\n[plugins]\nenabled = []\n')
+    content = '[bar.main]\nend = ["tray"]\n[plugins]\nenabled = []\n'
+    content += '\n[widget.clock]\nformat = "%H:%M"\n'
+    if existing_definition:
+        content += f'\n[widget."{installer.WIDGET}"]\ntype = "{installer.WIDGET}"\n'
+    overlay.write_text(content)
+    original_widgets = tomllib.loads(content)["widget"]
     record = state / "portforward-manager/installation.json"
     monkeypatch.setattr(installer, "CONFIG", config)
     monkeypatch.setattr(installer, "STATE", state)
@@ -93,7 +120,15 @@ def test_install_waits_for_noctalia_export_before_reloading(
             exports.append(timer)
             timer.start()
         if args == ("noctalia", "msg", "config-reload"):
-            assert installer.PLUGIN in tomllib.loads(overlay.read_text())["plugins"]["enabled"]
+            settings = tomllib.loads(overlay.read_text())
+            if installer.PLUGIN in settings["plugins"]["enabled"]:
+                assert settings["widget"][installer.WIDGET]["type"] == installer.WIDGET
+        if args == ("noctalia", "msg", "plugins", "disable", installer.PLUGIN):
+            overlay.write_text(
+                overlay.read_text().replace(
+                    f"enabled = {json.dumps([installer.PLUGIN])}", "enabled = []"
+                )
+            )
         return ""
 
     monkeypatch.setattr(installer, "command", command)
@@ -105,6 +140,16 @@ def test_install_waits_for_noctalia_export_before_reloading(
     settings = tomllib.loads(overlay.read_text())
     assert installer.PLUGIN in settings["plugins"]["enabled"]
     assert settings["bar"]["main"]["end"] == ["tray", installer.WIDGET]
+    assert settings["widget"][installer.WIDGET]["type"] == installer.WIDGET
+    assert json.loads(record.read_text())["desktop"]["owned_definition"] is not existing_definition
+    installer.install(False)
+    for timer in exports:
+        timer.join()
+    assert tomllib.loads(overlay.read_text())["bar"]["main"]["end"].count(installer.WIDGET) == 1
+    installer.remove()
+    removed = tomllib.loads(overlay.read_text())
+    assert removed["bar"]["main"]["end"] == ["tray"]
+    assert removed["widget"] == original_widgets
 
 
 def test_removal_handles_a_service_unloading_after_stop(

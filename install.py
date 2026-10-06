@@ -69,6 +69,34 @@ def rewrite_widget(text: str, bar: str, items: list[str]) -> str:
     return changed
 
 
+def rewrite_widget_definition(text: str, *, remove: bool = False) -> str:
+    """Register the bar reference as a plugin instance, preserving other config."""
+    expected = tomllib.loads(text)
+    widgets = expected.get("widget", {})
+    existing = widgets.get(WIDGET)
+    if existing is not None and existing.get("type") != WIDGET:
+        raise ValueError("The forwarding widget name is already used by another widget.")
+    if remove:
+        if existing is None:
+            return text
+        name = rf'(?:"{re.escape(WIDGET)}"|\'{re.escape(WIDGET)}\')'
+        blocks = rf"(?ms)^\[widget\.{name}(?:\.[^\n]*)?\][ \t]*\n.*?(?=^\[|\Z)"
+        changed = re.sub(blocks, "", text)
+        del widgets[WIDGET]
+        if not widgets:
+            expected.pop("widget")
+    else:
+        if existing is not None:
+            return text
+        changed = (
+            text.rstrip() + f"\n\n[widget.{json.dumps(WIDGET)}]\ntype = {json.dumps(WIDGET)}\n"
+        )
+        expected.setdefault("widget", {})[WIDGET] = {"type": WIDGET}
+    if tomllib.loads(changed) != expected:
+        raise ValueError("Refusing a widget declaration edit that changes unrelated settings.")
+    return changed
+
+
 def backup(path: Path, directory: Path) -> None:
     if path.exists():
         directory.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -125,6 +153,12 @@ def install(cli_only: bool) -> None:
         if WIDGET not in items:
             items = [*items, WIDGET]
         rewrite_widget(current, bar, items)
+        definition = local.get("widget", {}).get(WIDGET, settings.get("widget", {}).get(WIDGET))
+        if definition is not None and definition.get("type") != WIDGET:
+            raise ValueError("The forwarding widget name is already used by another widget.")
+        owned_definition = record.get("desktop", {}).get("owned_definition", definition is None)
+        if owned_definition:
+            rewrite_widget_definition(current)
         directory = RECORD.parent / "installation-backups" / str(time.time_ns())
         backup(base, directory)
         backup(overlay, directory)
@@ -132,6 +166,7 @@ def install(cli_only: bool) -> None:
             "config": str(target),
             "bar": bar,
             "owned_widget": owned,
+            "owned_definition": owned_definition,
             "backup": str(directory),
         }
     env = {**os.environ, "UV_TOOL_BIN_DIR": str(HOME / ".local/bin")}
@@ -161,7 +196,11 @@ def install(cli_only: bool) -> None:
         if WIDGET not in items:
             if not items:
                 items = bars[desktop["bar"]].get("end", [])
-            write(target, rewrite_widget(current, desktop["bar"], [*items, WIDGET]))
+            current = rewrite_widget(current, desktop["bar"], [*items, WIDGET])
+        if desktop["owned_definition"]:
+            current = rewrite_widget_definition(current)
+        if current != target.read_text():
+            write(target, current)
         command("noctalia", "msg", "config-reload")
     print("Installed. Profiles start only when you select Connect.")
 
@@ -200,6 +239,8 @@ def remove() -> None:
             text = target.read_text()
             items = tomllib.loads(text).get("bar", {}).get(desktop["bar"], {}).get("end", [])
             write(target, rewrite_widget(text, desktop["bar"], [x for x in items if x != WIDGET]))
+        if desktop.get("owned_definition") and target.exists():
+            write(target, rewrite_widget_definition(target.read_text(), remove=True))
         command("noctalia", "msg", "config-reload")
     UNIT.unlink(missing_ok=True)
     command("systemctl", "--user", "daemon-reload")
